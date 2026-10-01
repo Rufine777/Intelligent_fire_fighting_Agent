@@ -1,0 +1,35 @@
+# Intelligent Firefighting Agent - dependencies
+#
+# There are NO third-party Python packages in this project.
+# Every import is from the Python standard library:
+#
+#   tkinter          the GUI toolkit
+#   collections      deque (BFS queue)
+#   heapq            priority queues (UCS, Greedy, A*)
+#   dataclasses      Agent, Environment, SearchResult
+#   random           environment generation
+#   time             execution timing
+#   unittest         the test suite
+#
+# So this file is intentionally empty. `pip install -r requirements.txt`
+# is a no-op and is safe to run.
+#
+# ---------------------------------------------------------------------------
+# The one thing you DO need is Tkinter, which is a SYSTEM package, not a
+# pip package. `pip install tkinter` does not work.
+#
+# It is bundled with Python on Windows and macOS. On Linux install it with:
+#
+#   Arch:            sudo pacman -S tk
+#   Debian/Ubuntu:   sudo apt install python3-tk
+#   Fedora:          sudo dnf install python3-tkinter
+#   openSUSE:        sudo zypper install python3-tk
+#
+# Verify it works with:
+#
+#   python -c "import tkinter; print('Tk', tkinter.TkVersion)"
+#
+# If that prints a version, you are ready to run `python main.py`.
+# ---------------------------------------------------------------------------
+
+# (intentionally no packages listed)

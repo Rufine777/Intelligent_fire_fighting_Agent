@@ -9,14 +9,13 @@ how to paint:
     * the obstacles
     * the explored cells
     * the final path of each agent
-    * the agents, the fire and the water station
+    * the agents and the fire
     * the random cell costs (weighted mode only)
 
 Cell representation:
 
     A1 / A2 = agent 1 / agent 2
     F       = fire
-    W       = water station
     X       = obstacle
     1-9     = movement cost of the cell (weighted mode only)
 """
@@ -39,9 +38,7 @@ COLORS = {
     "path_2": "#8e24aa",
     "agent_1": "#0d47a1",
     "agent_2": "#4a148c",
-    "agent_active_border": "#00e676",
     "fire": "#e53935",
-    "water": "#039be5",
     "extinguished": "#2e7d32",
     "cost_text": "#455a64",
     "legend_text": "#37474f",
@@ -93,7 +90,6 @@ class GridRenderer:
         environment: Environment,
         explored_cells: list[Position] | set[Position] | None = None,
         paths: dict[int, list[Position]] | None = None,
-        active_agent_id: int | None = None,
         fire_extinguished: bool = False,
     ) -> None:
         """Redraw the whole grid from scratch.
@@ -102,7 +98,6 @@ class GridRenderer:
             environment: the environment to show.
             explored_cells: cells the search already looked at.
             paths: {agent_id: path} so each agent gets its own colour.
-            active_agent_id: which agent is selected in manual mode.
             fire_extinguished: True once an agent has put the fire out, which
                 adds a small tick so the fire cell stays visible underneath
                 the agent that is standing on it.
@@ -113,7 +108,7 @@ class GridRenderer:
 
         explored = set(explored_cells or [])
         paths = paths or {}
-        agent_positions = {agent.position: agent for agent in environment.agents}
+        agent_positions = {agent.position for agent in environment.agents}
 
         # 1. Cell backgrounds (walkable / obstacle).
         for row in range(environment.rows):
@@ -141,14 +136,13 @@ class GridRenderer:
         for agent_id, path in paths.items():
             self._draw_path(path, self._agent_color(agent_id))
 
-        # 4. Objects: water station, fire, then the agents on top.
-        self._draw_marker(environment.water_position, "W", COLORS["water"], "#ffffff")
+        # 4. Objects: the fire first, then the agents on top of it.
         self._draw_marker(
             environment.fire_position, "F", COLORS["fire"], "#ffffff"
         )
 
         for agent in environment.agents:
-            self._draw_agent(agent, active_agent_id)
+            self._draw_agent(agent)
 
         if fire_extinguished:
             self._draw_extinguished_badge(environment.fire_position)
@@ -179,7 +173,7 @@ class GridRenderer:
     def _draw_marker(
         self, position: Position, symbol: str, fill: str, text_color: str
     ) -> None:
-        """Draw a simple coloured square with a symbol (fire, water)."""
+        """Draw a simple coloured square with a symbol (the fire)."""
         x, y = self.cell_origin(position)
         inset = self.cell_size // 6
         self.canvas.create_rectangle(
@@ -191,22 +185,15 @@ class GridRenderer:
             text=symbol, fill=text_color, font=CELL_FONT,
         )
 
-    def _draw_agent(self, agent: Agent, active_agent_id: int | None) -> None:
-        """Draw one agent as a coloured square labelled A1 / A2.
-
-        The agent that is currently selected in manual mode gets a green
-        outline so the user can see who is being controlled.
-        """
+    def _draw_agent(self, agent: Agent) -> None:
+        """Draw one agent as a coloured square labelled A1 / A2."""
         x, y = self.cell_origin(agent.position)
         color = AGENT_COLORS[(agent.id - 1) % len(AGENT_COLORS)]
         inset = self.cell_size // 6
 
-        outline = COLORS["agent_active_border"] if agent.id == active_agent_id else color
-        outline_width = 3 if agent.id == active_agent_id else 1
-
         self.canvas.create_rectangle(
             x + inset, y + inset, x + self.cell_size - inset, y + self.cell_size - inset,
-            fill=color, outline=outline, width=outline_width,
+            fill=color, outline=color, width=1,
         )
         self.canvas.create_text(
             x + self.cell_size / 2, y + self.cell_size / 2,
@@ -233,12 +220,12 @@ class GridRenderer:
     def _draw_costs(
         self,
         environment: Environment,
-        agent_positions: dict[Position, Agent],
+        agent_positions: set[Position],
     ) -> None:
         """Write the cost number inside each walkable cell.
 
-        Costs are never drawn on top of an agent, the fire, the water station
-        or an obstacle, so the symbols stay readable.
+        Costs are never drawn on top of an agent, the fire or an obstacle, so
+        the symbols stay readable.
         """
         for row in range(environment.rows):
             for col in range(environment.cols):
@@ -248,8 +235,6 @@ class GridRenderer:
                 if position in agent_positions:
                     continue
                 if position == environment.fire_position:
-                    continue
-                if position == environment.water_position:
                     continue
 
                 x, y = self.cell_origin(position)
@@ -269,7 +254,6 @@ def build_legend(parent: tk.Misc) -> tk.Frame:
     entries = [
         ("A1 / A2", COLORS["agent_1"]),
         ("F  Fire", COLORS["fire"]),
-        ("W  Water", COLORS["water"]),
         ("X  Obstacle", COLORS["obstacle"]),
         ("Explored", COLORS["explored"]),
         ("Path", COLORS["path_1"]),

@@ -3,14 +3,15 @@ The Tkinter user interface for the Intelligent Firefighting Agent.
 
 One single window contains everything:
 
-    * the control panel (mode, number of agents, path mode, algorithm)
+    * the control panel (number of agents, path mode, algorithm)
     * the grid, drawn on a tkinter.Canvas
     * the buttons
     * the statistics panel
     * the algorithm comparison table
 
-Keyboard control is only active in Manual Mode, and only the selected agent
-responds. Search animation uses after() so the window never freezes.
+The app has a single flow: generate an environment, pick an algorithm, run the
+search and watch it unfold. Search animation uses after() so the window never
+freezes.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from tkinter import ttk
 import environment as env_module
 from algorithms import ALGORITHM_NAMES, SearchResult, run_search
 from models import (
-    Agent,
     DEFAULT_COLS,
     DEFAULT_ROWS,
     MAX_AGENTS,
@@ -32,6 +32,7 @@ from models import (
 )
 from statistics import (
     COMPARISON_COLUMNS,
+    STAT_LABELS,
     comparison_row,
     overall_status,
     result_statistics,
@@ -46,18 +47,6 @@ EXPLORE_FRAME_MS = 18
 MOVE_FRAME_MS = 110
 PATH_FRAME_MS = 60
 
-# Keyboard: arrow keys and WASD both work.
-KEY_DIRECTIONS = {
-    "Up": "UP",
-    "Down": "DOWN",
-    "Left": "LEFT",
-    "Right": "RIGHT",
-    "w": "UP",
-    "a": "LEFT",
-    "s": "DOWN",
-    "d": "RIGHT",
-}
-
 
 class FirefightingApp:
     """The whole application, held in one small class."""
@@ -69,22 +58,22 @@ class FirefightingApp:
         self.root.resizable(False, False)
 
         # --- application state (no global variables are used) -------------
-        self.mode = tk.StringVar(value="manual")
         self.agent_count = tk.IntVar(value=1)
         self.path_mode = tk.StringVar(value="unweighted")
         self.algorithm = tk.StringVar(value="BFS")
-        self.active_agent = tk.IntVar(value=1)
         self.status_text = tk.StringVar(value="Press 'Generate Environment' to begin.")
 
         self.environment: Environment | None = None
         self.results: dict[int, SearchResult] = {}
-        self.comparison: dict[str, tuple[str, ...]] = {}
+        # Rows for the comparison table, keyed by (algorithm, agent_id) so each
+        # agent of each algorithm keeps its own row. Only ever holds runs made
+        # on the current grid.
+        self.comparison: dict[tuple[str, int], tuple[str, ...]] = {}
         # The visualisation currently painted on the grid.
         self.shown_explored: set[Position] = set()
         self.shown_paths: dict[int, list[Position]] = {}
         self.animation_job: str | None = None
         self.animation_token = 0
-        self.animating = False
         self.mission_finished = False
 
         self._build_widgets()
@@ -101,7 +90,9 @@ class FirefightingApp:
         self._build_body()
         self._build_buttons()
         self._build_status_bar()
-        self._bind_keys()
+        # Stop any running animation when the window is closed, otherwise
+        # Tkinter would complain about a callback that no longer exists.
+        self.root.bind("<Destroy>", self._on_destroy)
 
     def _build_header(self) -> None:
         header = tk.Label(
@@ -128,66 +119,42 @@ class FirefightingApp:
         outer = tk.Frame(self.root, bg=COLORS["background"])
         outer.pack(fill=tk.X, padx=12, pady=(6, 0))
 
-        # Row 1: Mode | Number of agents | Path mode
-        row1 = tk.Frame(outer, bg=COLORS["background"])
-        row1.pack(fill=tk.X, pady=3)
+        row = tk.Frame(outer, bg=COLORS["background"])
+        row.pack(fill=tk.X, pady=3)
 
-        self.mode_frame = self._labeled_group(row1, "MODE", "left")
-        for text, value in (("Manual", "manual"), ("AI", "ai")):
-            tk.Radiobutton(
-                self.mode_frame, text=text, value=value, variable=self.mode,
-                command=self._on_mode_changed, bg=COLORS["background"],
-                activebackground=COLORS["background"], font=("Segoe UI", 9),
-            ).pack(side=tk.LEFT, padx=4)
-
-        self.agent_count_frame = self._labeled_group(row1, "NUMBER OF AGENTS", "left")
+        self.agent_count_frame = self._labeled_group(row, "NUMBER OF AGENTS")
         for value in range(MIN_AGENTS, MAX_AGENTS + 1):
             tk.Radiobutton(
                 self.agent_count_frame, text=str(value), value=value,
-                variable=self.agent_count, command=self._on_agent_count_changed,
+                variable=self.agent_count, command=self.generate_environment,
                 bg=COLORS["background"], activebackground=COLORS["background"],
                 font=("Segoe UI", 9),
             ).pack(side=tk.LEFT, padx=4)
 
-        self.path_mode_frame = self._labeled_group(row1, "PATH MODE", "left")
+        self.path_mode_frame = self._labeled_group(row, "PATH MODE")
         for text, value in (("Unweighted", "unweighted"), ("Weighted", "weighted")):
             tk.Radiobutton(
                 self.path_mode_frame, text=text, value=value, variable=self.path_mode,
-                command=self._on_path_mode_changed, bg=COLORS["background"],
+                command=self.generate_environment, bg=COLORS["background"],
                 activebackground=COLORS["background"], font=("Segoe UI", 9),
             ).pack(side=tk.LEFT, padx=4)
 
-        # Row 2: Algorithm | Active agent
-        row2 = tk.Frame(outer, bg=COLORS["background"])
-        row2.pack(fill=tk.X, pady=3)
-
-        self.algorithm_frame = self._labeled_group(row2, "ALGORITHM", "left")
+        self.algorithm_frame = self._labeled_group(row, "ALGORITHM")
         self.algorithm_box = ttk.Combobox(
             self.algorithm_frame, textvariable=self.algorithm,
             values=ALGORITHM_NAMES, state="readonly", width=18,
         )
         self.algorithm_box.pack(side=tk.LEFT, padx=4)
 
-        self.active_agent_frame = self._labeled_group(row2, "ACTIVE AGENT", "left")
-        for value in (1, 2):
-            tk.Radiobutton(
-                self.active_agent_frame, text=f"Agent {value}", value=value,
-                variable=self.active_agent, command=self._on_active_agent_changed,
-                bg=COLORS["background"], activebackground=COLORS["background"],
-                font=("Segoe UI", 9),
-            ).pack(side=tk.LEFT, padx=4)
-
         ttk.Separator(outer, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=8)
 
-    def _labeled_group(
-        self, parent: tk.Misc, title: str, side: str
-    ) -> tk.Frame:
-        """A group box with a small caption, used for the control rows."""
+    def _labeled_group(self, parent: tk.Misc, title: str) -> tk.Frame:
+        """A group box with a small caption, used for the control row."""
         group = tk.LabelFrame(
             parent, text=title, bg=COLORS["background"], fg=COLORS["legend_text"],
             font=("Segoe UI", 8, "bold"), padx=6, pady=4,
         )
-        group.pack(side=side, padx=(0, 10), anchor="n")
+        group.pack(side=tk.LEFT, padx=(0, 10), anchor="n")
         return group
 
     def _build_body(self) -> None:
@@ -234,8 +201,7 @@ class FirefightingApp:
         )
         labels: dict[str, tk.Label] = {}
 
-        for name in ("Algorithm", "Path Length", "Path Cost", "Nodes Explored",
-                     "Execution Time", "Status"):
+        for name in STAT_LABELS:
             tk.Label(
                 frame, text=f"{name}:", bg=COLORS["background"],
                 fg=COLORS["legend_text"], font=("Segoe UI", 9), anchor="w",
@@ -252,16 +218,16 @@ class FirefightingApp:
     def _build_comparison_table(self, parent: tk.Misc) -> None:
         """Table where every algorithm run on this environment is recorded."""
         frame = tk.LabelFrame(
-            parent, text="ALGORITHM COMPARISON (same environment)",
+            parent, text="ALGORITHM COMPARISON (current grid only)",
             bg=COLORS["background"], fg=COLORS["legend_text"],
             font=("Segoe UI", 9, "bold"), padx=8, pady=6,
         )
         frame.pack(fill=tk.BOTH, expand=True)
 
         self.comparison_tree = ttk.Treeview(
-            frame, columns=COMPARISON_COLUMNS, show="headings", height=5,
+            frame, columns=COMPARISON_COLUMNS, show="headings", height=10,
         )
-        widths = [110, 55, 50, 55, 70, 60]
+        widths = [110, 40, 55, 50, 55, 70, 60]
         for column, width in zip(COMPARISON_COLUMNS, widths):
             self.comparison_tree.heading(column, text=column)
             self.comparison_tree.column(column, width=width, anchor="w")
@@ -292,13 +258,6 @@ class FirefightingApp:
         )
         self.status_label.pack(fill=tk.X)
 
-    def _bind_keys(self) -> None:
-        self.root.bind("<KeyPress>", self._on_key_press)
-        # Stop any running animation when the window is closed, otherwise
-        # Tkinter would complain about a callback that no longer exists.
-        self.root.bind("<Destroy>", self._on_destroy)
-        self.root.focus_set()
-
     def _on_destroy(self, event: tk.Event) -> None:
         if event.widget is self.root:
             self._cancel_animation()
@@ -308,27 +267,16 @@ class FirefightingApp:
     # =====================================================================
 
     def _sync_controls(self) -> None:
-        """Show or hide the controls that do not apply to the current mode.
+        """Show or hide the controls that do not apply right now.
 
-        This is what keeps the interface clean:
-            * no algorithm selector in Manual Mode
-            * no active-agent selector in AI Mode or with a single agent
-            * no "Regenerate Costs" button in Unweighted Mode
-            * no Agent 2 statistics with a single agent
+        * no Agent 2 statistics when there is a single agent
+        * no "Regenerate Costs" button in Unweighted Mode
+        * no "Run Search" button before an environment exists
         """
-        is_ai = self.mode.get() == "ai"
-        is_weighted = self.path_mode.get() == "weighted"
-        has_two_agents = self.agent_count.get() == MAX_AGENTS
-
-        self._set_visible(self.algorithm_frame, is_ai, side=tk.LEFT,
-                          padx=(0, 10), anchor="n")
-        self._set_visible(self.active_agent_frame,
-                          not is_ai and has_two_agents,
-                          side=tk.LEFT, padx=(0, 10), anchor="n")
-        self._set_visible(self.stats_frames[2], has_two_agents,
+        self._set_visible(self.stats_frames[2], self.agent_count.get() == MAX_AGENTS,
                           fill=tk.X, pady=(0, 8))
-        self._set_state(self.regenerate_button, is_weighted)
-        self._set_state(self.run_button, is_ai and self.environment is not None)
+        self._set_state(self.regenerate_button, self.path_mode.get() == "weighted")
+        self._set_state(self.run_button, self.environment is not None)
 
     @staticmethod
     def _set_visible(widget: tk.Widget, visible: bool, **pack_options) -> None:
@@ -353,7 +301,7 @@ class FirefightingApp:
     # =====================================================================
 
     def generate_environment(self) -> None:
-        """Create a brand new environment and show it."""
+        """Create a brand new environment and clear the comparison table."""
         self._cancel_animation()
         self.environment = env_module.generate_environment(
             rows=DEFAULT_ROWS,
@@ -371,41 +319,16 @@ class FirefightingApp:
     def regenerate_costs(self) -> None:
         """New random cell costs, but the exact same environment.
 
-        Obstacles, agents, fire and water station stay where they are, so two
-        algorithms can be compared on identical terrain.
+        Obstacles, agents and the fire stay where they are, so two algorithms
+        can be compared on identical terrain. Changing the costs changes the
+        problem, so the old measurements are cleared rather than mixed in.
         """
         if self.environment is None:
             return
         self._cancel_animation()
         env_module.regenerate_costs(self.environment, random.Random())
-        self._redraw()
-        self.reset_view(regenerate_comparison=False)
+        self.reset_view(regenerate_comparison=True)
         self._set_status("New random cell costs generated (environment unchanged).")
-
-    def _on_agent_count_changed(self) -> None:
-        self._sync_controls()
-        self.generate_environment()
-
-    def _on_path_mode_changed(self) -> None:
-        self._sync_controls()
-        self.generate_environment()
-
-    def _on_mode_changed(self) -> None:
-        self.reset_view()
-        self._sync_controls()
-        if self.mode.get() == "manual":
-            self._set_status(
-                "Manual Mode: use Arrow keys or W A S D to move the selected agent. "
-                "Collect water at W first, then reach F."
-            )
-        else:
-            self._set_status(
-                "AI Mode: the agent is dispatched carrying water. The search "
-                "problem solved is Agent -> Fire. Pick an algorithm and run it."
-            )
-
-    def _on_active_agent_changed(self) -> None:
-        self._redraw()
 
     # =====================================================================
     # Drawing
@@ -423,101 +346,32 @@ class FirefightingApp:
         """
         if self.environment is None:
             return
-        active = self.active_agent.get() if self.mode.get() == "manual" else None
         self.renderer.draw(
             self.environment,
             explored_cells=self.shown_explored if explored is None else explored,
             paths=self.shown_paths if paths is None else paths,
-            active_agent_id=active,
             fire_extinguished=self.mission_finished,
         )
 
     # =====================================================================
-    # Manual mode
-    # =====================================================================
-
-    def _on_key_press(self, event: tk.Event) -> None:
-        """Keyboard handler. Only Manual Mode uses the keyboard."""
-        if self.mode.get() != "manual" or self.environment is None:
-            return
-
-        direction = KEY_DIRECTIONS.get(event.keysym) or KEY_DIRECTIONS.get(
-            event.keysym.lower()
-        )
-        if direction is None:
-            return
-
-        self._move_active_agent(direction)
-
-    def _move_active_agent(self, direction: str) -> None:
-        """Move the selected agent one step, if that is allowed."""
-        if self.environment is None or self.mission_finished:
-            return
-
-        agent = self.environment.get_agent(self.active_agent.get())
-        if agent is None:
-            return
-
-        # An invalid move (out of bounds or into an obstacle) simply does
-        # nothing at all.
-        if not env_module.can_move(self.environment, agent.position, direction):
-            return
-
-        delta_row, delta_col = env_module.DIRECTIONS[direction]
-        row, col = agent.position
-        agent.position = (row + delta_row, col + delta_col)
-
-        self._redraw()
-        self._check_manual_state(agent)
-
-    def _check_manual_state(self, agent: Agent) -> None:
-        """Pick up water and detect the fire after a manual move."""
-        if self.environment is None:
-            return
-
-        if agent.position == self.environment.water_position and not agent.has_water:
-            agent.has_water = True
-            self._redraw()
-            self._set_status(f"Agent {agent.id} picked up water at the water station.")
-            return
-
-        if agent.position == self.environment.fire_position:
-            if agent.has_water:
-                self.mission_finished = True
-                self._redraw()
-                self._set_status(
-                    f"SUCCESS - Fire extinguished by Agent {agent.id}!",
-                    color=COLORS["fire"],
-                )
-            else:
-                self._set_status(
-                    f"Agent {agent.id} reached the fire without water. "
-                    "Go to the water station (W) first.",
-                )
-
-    # =====================================================================
-    # AI mode: running and animating the search
+    # Running and animating the search
     # =====================================================================
 
     def run_search(self) -> None:
         """Run the chosen algorithm for every agent on the same environment.
 
-        The environment is never regenerated between agents or between
-        algorithms, so the comparison is always fair.
+        The agents are first put back on their starting cells, so every
+        algorithm is always given exactly the same problem and the comparison
+        table stays meaningful without the user having to press Reset.
         """
-        if self.environment is None or self.mode.get() != "ai":
+        if self.environment is None:
             return
 
         self._cancel_animation()
         self.mission_finished = False
         self.shown_explored = set()
         self.shown_paths = {}
-
-        # In AI Mode the agent leaves the station already carrying water, so
-        # the search problem stays the simple one: Agent -> Fire. (If the route
-        # happens to pass the water station, the agent refills there anyway.)
-        for agent in self.environment.agents:
-            agent.has_water = True
+        self._restore_agent_positions()
 
         results = [
             run_search(
@@ -557,7 +411,6 @@ class FirefightingApp:
         """
         self.animation_token += 1
         token = self.animation_token
-        self.animating = True
         order = [result.explored_cells for result in results]
         longest = max((len(cells) for cells in order), default=0)
         cursor = 0
@@ -573,15 +426,12 @@ class FirefightingApp:
 
             explored: set[Position] = set()
             for cells in order:
-                for cell in cells[cursor:cursor + EXPLORE_CELLS_PER_FRAME]:
-                    explored.add(cell)
+                explored.update(cells[cursor:cursor + EXPLORE_CELLS_PER_FRAME])
             cursor += EXPLORE_CELLS_PER_FRAME
 
             self.shown_explored = explored
             self._redraw()
-            self.animation_job = self.root.after(
-                EXPLORE_FRAME_MS, step
-            )
+            self.animation_job = self.root.after(EXPLORE_FRAME_MS, step)
 
         self.animation_job = self.root.after(0, step)
 
@@ -607,20 +457,17 @@ class FirefightingApp:
             return
 
         self.animation_job = self.root.after(
-            PATH_FRAME_MS, lambda: self._animate_movement(results, paths, explored)
+            PATH_FRAME_MS, lambda: self._animate_movement(results, paths)
         )
 
     def _animate_movement(
         self,
         results: list[SearchResult],
         paths: dict[int, list[Position]],
-        explored: set[Position],
     ) -> None:
         """Walk each agent along its own path, one cell per frame."""
         self.animation_token += 1
         token = self.animation_token
-        if self.environment is None:
-            return
 
         # The moves still to perform. The first cell of a path is the cell the
         # agent already stands on, so it is not a move.
@@ -637,15 +484,10 @@ class FirefightingApp:
                 return
 
             for agent_id, sequence in moves.items():
-                if step_index >= len(sequence):
-                    continue
-                agent = self.environment.get_agent(agent_id)
-                if agent is None:
-                    continue
-                agent.position = sequence[step_index]
-                # Passing the water station refills the agent.
-                if agent.position == self.environment.water_position:
-                    agent.has_water = True
+                if step_index < len(sequence):
+                    agent = self.environment.get_agent(agent_id)
+                    if agent is not None:
+                        agent.position = sequence[step_index]
 
             step_index += 1
             self._redraw()
@@ -660,14 +502,7 @@ class FirefightingApp:
 
     def _complete_mission(self, results: list[SearchResult]) -> None:
         """Final message once the animation is over."""
-        if self.environment is not None:
-            for result in results:
-                agent = self.environment.get_agent(result.agent_id)
-                if agent is not None and result.success:
-                    agent.has_water = True
-
         self.mission_finished = any(result.success for result in results)
-        self.animating = False
         self.animation_job = None
         self._redraw()
 
@@ -695,22 +530,28 @@ class FirefightingApp:
             )
 
     def _record_comparison(self) -> None:
-        """Store this run in the comparison table (one row per algorithm).
+        """Store every agent's run for this algorithm in the table.
 
-        With two agents the row of Agent 1 is recorded, and the algorithm
-        name is suffixed with the agent id so nothing is ambiguous.
+        Each (algorithm, agent) pair gets its own row, so with two agents you
+        can read both execution times directly instead of only Agent 1's.
+        Re-running the same algorithm replaces that row rather than adding a
+        duplicate. The table only ever holds runs made on the current grid: it
+        is cleared whenever the grid or its costs change.
         """
         if not self.results:
             return
-        result = self.results[min(self.results)]
-        row = list(comparison_row(result))
-        if len(self.results) > 1:
-            row[0] = f"{row[0]} (A{result.agent_id})"
-        self.comparison[result.algorithm] = tuple(row)
 
+        for agent_id in sorted(self.results):
+            result = self.results[agent_id]
+            self.comparison[(result.algorithm, agent_id)] = comparison_row(result)
+
+        self._refresh_comparison_tree()
+
+    def _refresh_comparison_tree(self) -> None:
+        """Redraw the table from the stored rows (agent 1 first, then agent 2)."""
         self.comparison_tree.delete(*self.comparison_tree.get_children())
-        for entry in self.comparison.values():
-            self.comparison_tree.insert("", tk.END, values=entry)
+        for key in sorted(self.comparison, key=lambda k: (k[1], k[0])):
+            self.comparison_tree.insert("", tk.END, values=self.comparison[key])
 
     def _clear_statistics(self) -> None:
         for labels in self.stats_labels.values():
@@ -729,8 +570,10 @@ class FirefightingApp:
     def reset_view(self, regenerate_comparison: bool = True) -> None:
         """Clear the search visualisation and the statistics.
 
-        The environment itself is kept, so the same problem can immediately
-        be given to another algorithm.
+        The environment is kept, so the same problem can immediately be given
+        to another algorithm. With regenerate_comparison the table is cleared
+        too, which is what happens whenever the grid or its costs change - rows
+        from a different grid must never sit next to each other.
         """
         self._cancel_animation()
         self.mission_finished = False
@@ -757,12 +600,10 @@ class FirefightingApp:
         for index, agent in enumerate(self.environment.agents):
             if index < len(self.environment.start_positions):
                 agent.position = self.environment.start_positions[index]
-            agent.has_water = False
 
     def _cancel_animation(self) -> None:
         """Stop any running animation before starting something new."""
         self.animation_token += 1
-        self.animating = False
         if self.animation_job is not None:
             try:
                 self.root.after_cancel(self.animation_job)

@@ -4,7 +4,7 @@ Data structures for the Intelligent Firefighting Agent project.
 This module holds the simple "models" used by the whole application:
 
     Agent          - one firefighting agent
-    Environment    - the grid world (obstacles, fire, water, costs)
+    Environment    - the grid world (obstacles, fire, costs)
     SearchResult   - the outcome of one search run
 
 Nothing in this module performs any work; it only describes the data.
@@ -45,13 +45,11 @@ Position = tuple[int, int]
 class Agent:
     """A single firefighting agent.
 
-    The agent is deliberately simple. It only needs to know where it is and
-    whether it is currently carrying water.
+    The agent is deliberately simple. It only needs to know where it is.
     """
 
     id: int
     position: Position
-    has_water: bool = False
 
     @property
     def label(self) -> str:
@@ -72,9 +70,9 @@ class Environment:
         * unweighted mode -> cost is always 1
         * weighted mode   -> cost is a random number between 1 and 9
 
-    The fire, the water station and the obstacles are all treated as ordinary
-    walkable cells for the search algorithms. The search only has to avoid the
-    obstacles; picking up water and putting out the fire is simulation logic.
+    The fire and the obstacles are all treated as ordinary walkable cells for
+    the search algorithms. The search only has to avoid the obstacles; the
+    single problem being solved is Agent -> Fire.
     """
 
     rows: int
@@ -82,7 +80,6 @@ class Environment:
     agents: list[Agent] = field(default_factory=list)
     obstacles: set[Position] = field(default_factory=set)
     fire_position: Position = (0, 0)
-    water_position: Position = (0, 0)
     cell_costs: dict[Position, int] = field(default_factory=dict)
     weighted: bool = False
     # Where each agent started. Keeping this lets Reset put the agents back

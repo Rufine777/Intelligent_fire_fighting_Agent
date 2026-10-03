@@ -1,0 +1,8 @@
+# Virtual environments (see setup.md)
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]

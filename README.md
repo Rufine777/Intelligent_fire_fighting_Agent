@@ -31,36 +31,60 @@ sudo dnf install python3-tkinter   # Fedora
 
 Check it works: `python -c "import tkinter; print(tkinter.TkVersion)"`
 
+For a step-by-step walkthrough on **Windows, macOS or Linux** — including
+creating and activating a `venv` — see **[`setup.md`](setup.md)**.
+
 ---
 
 ## Use it
 
-**Manual Mode** — you drive with `↑ ↓ ← →` or `W A S D`. Collect water at `W`,
-then reach the fire at `F`.
-
-**AI Mode** — pick an algorithm and press **Run Search**. The app animates the
-cells it explored, the path it chose, and the agent walking it.
+The app has one flow: generate an environment, pick an algorithm, press
+**Run Search**. It animates the cells the search explored, the path it chose,
+and the agent walking it.
 
 ### Comparing algorithms fairly
 
 ```
 Generate Environment  →  Regenerate Costs (weighted only)
         ↓
-   BFS → Reset → DFS → Reset → UCS → Reset → Greedy → Reset → A*
+   BFS → DFS → UCS → Greedy → A*
         ↓
-   read the five rows in the COMPARISON table
+   read the rows in the COMPARISON table
 ```
 
-The environment is never regenerated between algorithms — search functions only
-*read* it, so the comparison is guaranteed to be fair.
+You do **not** need to press Reset between algorithms — every search starts
+from the agents' original cells, and the environment is never regenerated.
+Search functions only *read* the environment, so the comparison is guaranteed
+to be fair.
+
+Every **(algorithm, agent) pair gets its own row**, so with two agents you can
+read both agents' execution times directly instead of only Agent 1's:
+
+| Algorithm | Agent | Length | Cost | Nodes | Time (ms) | Result |
+| --- | :-: | --: | --: | --: | --: | --- |
+| A\* | A1 | 5 | 5 | 9 | 0.036 | Success |
+| BFS | A1 | 5 | 5 | 31 | 0.049 | Success |
+| A\* | A2 | 7 | 7 | 15 | 0.047 | Success |
+| BFS | A2 | 7 | 7 | 54 | 0.079 | Success |
+
+The table holds **only runs made on the current grid**. It is cleared whenever
+the grid changes — pressing **Generate Environment**, switching between 1 and 2
+agents, or pressing **Regenerate Costs** — so measurements from two different
+problems can never end up stacked in the same table and look comparable when they
+are not.
+
+Re-running an algorithm **replaces** that row rather than adding a duplicate, so
+running all five algorithms twice still leaves exactly five rows per agent.
+
+Nothing is written to disk: the comparison lives for as long as the window is
+open.
 
 ### Grid symbols
 
 | | |
 | --- | --- |
-| `A1` `A2` | agents (green outline = currently controlled) |
+| `A1` `A2` | agents |
 | `F` | fire |
-| `W` | water station |
 | `X` | obstacle |
 | `1`–`9` | cell cost (weighted mode only) |
 | amber cell | explored by the search |
@@ -73,14 +97,14 @@ The environment is never regenerated between algorithms — search functions onl
 | File | Lines | What it does |
 | --- | ---: | --- |
 | `main.py` | 37 | Opens the window and starts the app. Nothing else. |
-| `models.py` | 118 | The vocabulary: `Agent`, `Environment`, and every tunable constant. |
-| `environment.py` | 326 | Builds the world: random maps, obstacles, agents, fire, water, costs. Also the rules — legal moves, path length, path cost. |
+| `models.py` | 115 | The vocabulary: `Agent`, `Environment`, and every tunable constant. |
+| `environment.py` | 234 | Builds the world: random maps, obstacles, agents, fire, costs. Also the rules — neighbours, path length, path cost. |
 | `algorithms.py` | 461 | **The core.** `bfs`, `dfs`, `ucs`, `greedy_best_first`, `astar` — plus the shared `SearchResult`. |
 | `statistics.py` | 87 | Turns numbers into the text you see (stat panels, comparison table, status). |
-| `visualization.py` | 284 | All drawing on the tkinter canvas: cells, paths, agents, costs, legend. |
-| `ui.py` | 771 | The single window: controls, buttons, keyboard, and the animation. |
-| `test_project.py` | 1 330 | 97 tests covering the algorithms and the GUI. |
+| `visualization.py` | 268 | All drawing on the tkinter canvas: cells, paths, agents, costs, legend. |
+| `ui.py` | 611 | The single window: controls, buttons, the animation, and the comparison table. |
 | `Learn.md` | — | **Start here** — a step-by-step curriculum for understanding the code. |
+| `setup.md` | — | Installation and `venv` setup for Windows, macOS and Linux. |
 
 ### How the modules depend on each other
 
@@ -127,13 +151,27 @@ come from running the real algorithms.
 
 ## Tests
 
-```bash
-python -m unittest test_project -v      # all 97
-xvfb-run -a python -m unittest test_project -v   # headless machine
-```
+There is no test suite in the repo right now. To check the algorithms by hand,
+the fastest sanity pass is:
 
-On a machine with no display, the 39 GUI tests skip themselves and the other 58
-still run.
+```bash
+python - <<'PY'
+import random
+from environment import generate_environment, is_solvable
+from algorithms import ALGORITHM_NAMES, run_search
+
+for seed in range(100):
+    env = generate_environment(12, 12, 1, weighted=seed % 2 == 0,
+                               rng=random.Random(seed))
+    assert is_solvable(env)
+    for name in ALGORITHM_NAMES:
+        r = run_search(name, env, env.agents[0].position, env.fire_position, 1)
+        assert r.success and r.path[0] == env.agents[0].position
+        assert r.path[-1] == env.fire_position
+        assert all(env.is_walkable(c) for c in r.path)
+print("100 maps x 5 algorithms: all paths valid")
+PY
+```
 
 ---
 
@@ -141,6 +179,9 @@ still run.
 
 New to the project? Read **[`Learn.md`](Learn.md)** — 14 sessions that take you
 from "what is an AI agent" to reading any function in the codebase.
+
+> Session 14 still walks through a `test_project.py` suite that is no longer in
+> the repo. The rest of the sessions match the current code.
 
 ---
 
@@ -150,7 +191,12 @@ from "what is an AI agent" to reading any function in the codebase.
   this project, but confusing if you write your own scratch scripts in this
   folder.
 - Wall-clock timings are noise at this grid size (every search finishes in under
-  a millisecond). Compare **cells explored**, not milliseconds.
-- The water station and the fire are ordinary walkable cells for the search —
-  deliberate, so the problem stays the classic *Agent → Fire*. `Learn.md`
-  session 12 explains the reasoning.
+  a millisecond). Compare **cells explored**, not milliseconds. The time is still
+  recorded per row, but treat small differences as meaningless.
+- The fire is an ordinary walkable cell for the search — deliberate, so the
+  problem stays the classic *Agent → Fire*. `Learn.md` session 12 explains the
+  reasoning.
+- Nothing is saved to disk. Closing the window loses the comparison, which is the
+  trade for never mixing numbers from two different grids into one table.
+- Pressing **Regenerate Costs** clears the table, because changing the cell costs
+  changes the problem — rows from before and after it are not comparable.

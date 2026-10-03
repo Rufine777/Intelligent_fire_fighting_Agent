@@ -3,7 +3,7 @@ Statistics formatting for the Intelligent Firefighting Agent.
 
 The search algorithms only return numbers. This module turns those numbers
 into the exact text shown in the user interface, so the same wording is used
-for every algorithm and for both agents.
+for every algorithm and for every agent.
 
 Keeping this separate means the UI never has to know how a statistic is
 calculated - it only asks for the text.
@@ -23,8 +23,11 @@ STAT_LABELS = [
     "Status",
 ]
 
-# Columns of the algorithm comparison table.
-COMPARISON_COLUMNS = ["Algorithm", "Length", "Cost", "Nodes", "Time (ms)", "Result"]
+# Columns of the algorithm comparison table. Every (algorithm, agent) pair gets
+# its own row, so with two agents you can read both agents' times directly.
+COMPARISON_COLUMNS = [
+    "Algorithm", "Agent", "Length", "Cost", "Nodes", "Time (ms)", "Result",
+]
 
 
 def format_time(milliseconds: float) -> str:
@@ -54,9 +57,10 @@ def result_statistics(result: SearchResult | None) -> list[tuple[str, str]]:
 
 
 def comparison_row(result: SearchResult) -> tuple[str, ...]:
-    """One row of the algorithm comparison table."""
+    """One row of the algorithm comparison table, for one agent."""
     return (
         result.algorithm,
+        f"A{result.agent_id}",
         str(result.path_length),
         str(result.path_cost),
         str(result.nodes_explored),
@@ -75,13 +79,9 @@ def overall_status(results: list[SearchResult]) -> tuple[str, str]:
     if not results:
         return "PENDING", "Run a search to see the result."
 
-    successful = [r for r in results if r.success]
-
+    successful = [result for result in results if result.success]
     if successful:
-        names = ", ".join(f"Agent {r.agent_id}" for r in successful)
+        names = ", ".join(f"Agent {result.agent_id}" for result in successful)
         return "SUCCESS", f"Fire extinguished! Reached by {names}."
 
-    return (
-        "FAILURE",
-        "No agent can reach the fire.",
-    )
+    return "FAILURE", "No agent can reach the fire."

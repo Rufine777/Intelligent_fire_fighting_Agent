@@ -79,9 +79,9 @@ Every intelligent agent is described with **PEAS**:
 | Element | Question | Answer here |
 | --- | --- | --- |
 | **P**erformance measure | What counts as doing well? | Reach the fire. Minimise path cost and cells explored. |
-| **E**nvironment | Where does it operate? | A 2D grid of obstacles, a fire, a water station, per-cell costs |
+| **E**nvironment | Where does it operate? | A 2D grid of obstacles, a fire, per-cell costs |
 | **A**ctuators | What can it do? | Four moves: `UP`, `DOWN`, `LEFT`, `RIGHT` |
-| **S**ensors | What can it see? | Its position, obstacles, fire, water, grid edges, neighbour costs |
+| **S**ensors | What can it see? | Its position, obstacles, fire, grid edges, neighbour costs |
 
 The environment is **discrete, finite, static, fully observable and
 deterministic**. That matters enormously:
@@ -117,10 +117,8 @@ above. Anything you got wrong, the code will teach you.
 
 ## Check yourself
 
-- Why does the agent not need to plan *to the water station first*?
-  *(Clue: read the "Notes" section of `README.md`.)*
-- The environment is *deterministic*. What would change if it weren't?
-- Why is the water station a walkable cell rather than an obstacle?
+- Why is the fire a walkable cell rather than an obstacle?
+- The environment is *deterministic*. What would change if it wasn't?
 
 ## Exercise
 
@@ -195,7 +193,7 @@ from algorithms import run_search
 
 env = generate_environment(10, 10, 1, weighted=True)
 print("agents:", [a.position for a in env.agents])
-print("fire:", env.fire_position, " water:", env.water_position)
+print("fire:", env.fire_position)
 print("obstacles:", sorted(env.obstacles))
 
 for name in ("BFS", "DFS", "UCS", "Greedy Best-First", "A*"):
@@ -241,7 +239,7 @@ Position = tuple[int, int]   # row first, then column, like matrix[row][col]
 
 Note **row, column** — not x, y. This trips people up constantly when they reach
 the drawing code, because canvas coordinates are `(x, y)` = `(col, row)`. The
-inversion is handled in exactly one place, `visualization.py:70`.
+inversion is handled in exactly one place, `visualization.py:67-69`.
 
 ### Two dataclasses
 
@@ -250,7 +248,6 @@ inversion is handled in exactly one place, `visualization.py:70`.
 class Agent:
     id: int
     position: Position
-    has_water: bool = False
 
     @property
     def label(self) -> str:
@@ -265,7 +262,6 @@ class Environment:
     agents: list[Agent] = field(default_factory=list)
     obstacles: set[Position] = field(default_factory=set)
     fire_position: Position = (0, 0)
-    water_position: Position = (0, 0)
     cell_costs: dict[Position, int] = field(default_factory=dict)
     weighted: bool = False
     start_positions: list[Position] = field(default_factory=list)
@@ -353,9 +349,9 @@ never overlap.
 
 ## Read
 
-- `environment.py:167-245` — `generate_environment`
-- `environment.py:72-112` — `reachable_cells` and `is_solvable`
-- `environment.py:296-326` — `neighbours`, `path_cost`, `path_length`
+- `environment.py:156-211` — `generate_environment`
+- `environment.py:84-119` — `reachable_cells` and `is_solvable`
+- `environment.py:45-77` — `neighbours`, `path_cost`, `path_length`
 
 ## Key ideas
 
@@ -364,19 +360,15 @@ never overlap.
 ```python
 free_cells = all_cells_shuffled()
 
-fire_position = free_cells.pop()      # 1. fire
-water_position = free_cells.pop()     # 2. water
-agents = [Agent(id=i+1, position=free_cells.pop())   # 3. agents
-          for i in range(num_agents)]
-
-for _ in range(max_obstacles):        # 4. only leftovers become obstacles
-    obstacles.add(free_cells.pop())
+fire_position = free_cells[0]                      # 1. fire
+start_positions = free_cells[1:1 + num_agents]      # 2. agents
+obstacles = set(free_cells[1 + num_agents:][:max_obstacles])  # 3. leftovers
 ```
 
-Each object is **popped off a shuffled list first**. Obstacles can only come from
-what remains. Overlap is not prevented by a check — it is *unrepresentable*.
-This is much stronger than validating after the fact, because there is no code
-path where it could happen.
+The shuffled list is **dealt out in order**: the fire, then one cell per agent,
+then the obstacles. Every cell is handed out exactly once, so overlap is not
+prevented by a check — it is *unrepresentable*. This is much stronger than
+validating after the fact, because there is no code path where it could happen.
 
 ### Rejection sampling
 
@@ -447,9 +439,9 @@ from algorithms import bfs
 # 1. Non-overlap, across many seeds
 for seed in range(50):
     env = generate_environment(12, 12, 2, rng=random.Random(seed))
-    taken = {env.fire_position, env.water_position}
+    taken = {env.fire_position}
     taken |= {a.position for a in env.agents}
-    assert len(taken) == 2 + len(env.agents), f"overlap at seed {seed}"
+    assert len(taken) == 1 + len(env.agents), f"overlap at seed {seed}"
     assert not (taken & env.obstacles), f"obstacle overlap at seed {seed}"
 print("50 seeds: no overlap, and all solvable:",
       all(is_solvable(generate_environment(12, 12, 2, rng=random.Random(s)))
@@ -475,7 +467,7 @@ PY
 
 ## Check yourself
 
-- Why is the obstacle count clamped to `total_cells - num_agents - 2`?
+- Why is the obstacle count clamped to `total_cells - num_agents - 1`?
   What would break without it?
 - How would the results change if `neighbours` returned a random order?
 - `is_solvable` returns `True` if **any** agent can reach the fire. Why
@@ -676,7 +668,7 @@ def grid(rows=5, cols=5, weighted=False, costs=None):
     return Environment(rows=rows, cols=cols,
                        agents=[Agent(id=1, position=(0, 0))],
                        obstacles=set(), fire_position=(rows-1, cols-1),
-                       water_position=(0, cols-1), cell_costs=dict(costs or {}),
+                       cell_costs=dict(costs or {}),
                        weighted=weighted, start_positions=[(0, 0)])
 
 env = grid()
@@ -711,7 +703,7 @@ costs = {
 }
 env = Environment(rows=5, cols=5, agents=[Agent(id=1, position=(4, 0))],
                   obstacles={(1,1), (3,2), (4,1), (4,2), (4,3)},
-                  fire_position=(0, 4), water_position=(0, 0),
+                  fire_position=(0, 4),
                   cell_costs=costs, weighted=True, start_positions=[(4, 0)])
 
 for name, fn in (("BFS", bfs), ("UCS", ucs), ("A*", astar)):
@@ -834,7 +826,7 @@ from algorithms import bfs, dfs
 # Fire in the very next cell: DFS walks straight to it.
 env = Environment(rows=10, cols=10, agents=[Agent(id=1, position=(0, 0))],
                   obstacles=set(), fire_position=(0, 1),
-                  water_position=(9, 9), start_positions=[(0, 0)])
+                  start_positions=[(0, 0)])
 for name, fn in (("BFS", bfs), ("DFS", dfs)):
     r = fn(env, (0, 0), (0, 1), 1)
     print(f"{name}: moves={r.path_length} explored={r.nodes_explored}")
@@ -996,7 +988,7 @@ Zero mismatches means UCS is provably correct on this problem class.
 - When BFS and UCS produce the same answer, what does that tell you about the
   map?
 - In the oracle, why did `true_min_cost` subtract `env.cost_of(start)` at the
-  end? (Clue: read `path_cost` in `environment.py:312`.)
+  end? (Clue: read `path_cost` in `environment.py:63`.)
 
 ## Exercise
 
@@ -1141,7 +1133,8 @@ PY
 Prove Manhattan is **not** an admissible heuristic for 8-way (diagonal) movement.
 Work out the true cost of a single diagonal step under both metrics. Then decide:
 if you added diagonals to `DIRECTIONS`, would you also need to change `manhattan`?
-Try it — add diagonals to `environment.py:36-41` in a copy and see what breaks in
+Try it — add diagonals to the tuple in `neighbours` (`environment.py:52`) in a
+copy and see what breaks in
 the algorithms.
 
 ---
@@ -1426,7 +1419,8 @@ Reproduce the README benchmark table from scratch: 300 maps of 12×12, half
 weighted, all five algorithms. Print averages for cost, length and nodes. Your
 numbers should match the README exactly — and when they do, you have proved the
 whole system is deterministic. Then change the order of neighbours in
-`environment.py:305` and re-run. Which numbers change, and which don't?
+`regenerate_costs` in `environment.py` and re-run. Which numbers change, and
+which don't?
 
 ---
 
@@ -1438,9 +1432,9 @@ a viva will actually ask.
 ## Read
 
 - `main.py:20-33`
-- `environment.py:72-98` (the local flood fill)
+- `environment.py:84-105` (the local flood fill)
 - `algorithms.py:49-71` (`SearchResult`), `439-461` (the registry)
-- `environment.py:167-245` (placement order), `191` (the clamp)
+- `environment.py:156-211` (placement order), `170-172` (the clamp)
 - `models.py:86-90` (`start_positions`)
 
 ## Key ideas
@@ -1484,23 +1478,19 @@ The UI calls `run_search(name, ...)` and never changes. Adding an algorithm
 means writing one function and adding one dict entry. No `if algorithm == ...`
 chain anywhere.
 
-### 5. Why the fire and water are walkable
+### 5. Why the fire is walkable
 
-The search problem stays *Agent → Fire*. If fire and water blocked movement, two
+The search problem stays *Agent → Fire*. If the fire blocked movement, two
 agents would have to route around each other's objectives, and the comparison
 would be measuring task decomposition rather than search.
-
-Water is a **precondition**, not a planning problem. In Manual Mode it's
-genuinely enforced; in AI Mode the agent is dispatched carrying it. Recognising
-and stating this simplification is a *stronger* demonstration than hiding it.
 
 ### 6. Clamping over validating
 
 ```python
-max_obstacles = max(0, min(total_cells - num_agents - 2, int(total_cells * obstacle_ratio)))
+max_obstacles = max(0, min(total_cells - num_agents - 1, int(total_cells * obstacle_ratio)))
 ```
 
-`total_cells - num_agents - 2` reserves enough cells that `free_cells.pop()`
+`total_cells - num_agents - 1` reserves enough cells that the shuffled cell list
 can never run out. The invariant is enforced where it's established, not checked
 afterwards.
 
@@ -1511,7 +1501,6 @@ afterwards.
 | No display | friendly message, exit code 1 |
 | 500 failed generations | guaranteed-solvable fallback map |
 | No route exists | normal `SearchResult(success=False)` |
-| Unknown direction | `False`, not `KeyError` |
 | Agent count out of range | clamped |
 | Cancel during window teardown | `except tk.TclError` |
 
@@ -1553,14 +1542,14 @@ from algorithms import ALGORITHM_NAMES, run_search
 
 env = generate_environment(12, 12, 1, weighted=True, rng=random.Random(9))
 snapshot = (sorted(env.obstacles), dict(env.cell_costs),
-            env.fire_position, env.water_position,
+            env.fire_position,
             {a.id: a.position for a in env.agents})
 
 for name in ALGORITHM_NAMES:
     run_search(name, env, env.agents[0].position, env.fire_position, 1)
 
 after = (sorted(env.obstacles), dict(env.cell_costs),
-         env.fire_position, env.water_position,
+         env.fire_position,
          {a.id: a.position for a in env.agents})
 print("environment unchanged after all 5 algorithms:", snapshot == after)
 PY
@@ -1578,7 +1567,8 @@ PY
 Pick one design decision you disagree with and write a 200-word argument
 against it. Good candidates:
 
-- Should the search plan *to the water station* as a real two-leg journey?
+- Should each agent get its own search instead of all agents racing to the
+  same fire cell?
 - Should `statistics.py` be renamed to avoid shadowing the stdlib module?
 - Should grid size be user-configurable rather than hard-coded?
 
@@ -1591,14 +1581,14 @@ without breaking it.
 
 ## Read
 
-- `ui.py:41-59` — timing constants and key bindings
-- `ui.py:62-92` — `__init__` and all application state
-- `ui.py:310-349` — `_sync_controls`, `_set_visible`, `_set_state`
-- `ui.py:502-550` — `run_search`
-- `ui.py:552-611` — `_animate_exploration`
-- `ui.py:613-659` — `_animate_movement`
-- `ui.py:762-771` — `_cancel_animation`
-- `visualization.py:59-160` — `GridRenderer.draw`
+- `ui.py:48-51` — animation timing constants
+- `ui.py:57-91` — `__init__` and all application state
+- `ui.py:307-337` — `_sync_controls`, `_set_visible`, `_set_state`
+- `ui.py:411-455` — `run_search`
+- `ui.py:457-487` — `_animate_exploration`
+- `ui.py:514-558` — `_animate_movement`
+- `ui.py:727-735` — `_cancel_animation`
+- `visualization.py:91-154` — `GridRenderer.draw`
 
 ## Key ideas
 
@@ -1678,14 +1668,14 @@ with the same capability.
 
 ### Painting order *is* the layering
 
-`GridRenderer.draw()` (`visualization.py:91-158`) repaints everything in a fixed
+`GridRenderer.draw()` (`visualization.py:91-154`) repaints everything in a fixed
 order:
 
 ```
 1. cell backgrounds
 2. explored cells (amber)
 3. paths (one colour per agent)
-4. water, then fire
+4. fire
 5. agents            <- last, so they sit on top
 6. extinguished badge
 7. cell costs        <- but skipped over symbols
@@ -1722,7 +1712,7 @@ ttk.Button(bar, text="Panic Cancel", command=self._cancel_animation).pack(side=t
 Press **Run Search**, then mash **Panic Cancel**. No traceback should appear.
 
 Then break the layout rule deliberately. Change `_set_visible` to this and click
-between Manual and AI mode:
+between 1 and 2 agents:
 
 ```python
 @staticmethod
@@ -1758,8 +1748,9 @@ for m in re.finditer(r'canvas\.create_(\w+)\(', src):
 Change `EXPLORE_CELLS_PER_FRAME` from `2` to `12` and `EXPLORE_FRAME_MS` from
 `18` to `1`. The animation should now be effectively instant. Then find the
 combination where exploration is *faster* than movement and explain why the app
-looks broken. Finally, add a keyboard shortcut (say `R` for run search) and
-confirm it does not fire in Manual Mode — read `_on_key_press` to see why.
+looks broken. Finally, add a keyboard shortcut (say `R` to run the search) using
+`root.bind("<KeyPress-r>", ...)` and confirm it works while an animation is
+running — read `_cancel_animation` to see why it stays safe.
 
 ---
 

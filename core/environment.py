@@ -18,7 +18,7 @@ from __future__ import annotations
 import random
 from collections import deque
 
-from models import (
+from core.models import (
     DEFAULT_COLS,
     DEFAULT_OBSTACLE_RATIO,
     DEFAULT_ROWS,

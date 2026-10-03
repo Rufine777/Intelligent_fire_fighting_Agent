@@ -44,7 +44,6 @@ Position = tuple[int, int]
 @dataclass
 class Agent:
     """A single firefighting agent.
-
     The agent is deliberately simple. It only needs to know where it is.
     """
 

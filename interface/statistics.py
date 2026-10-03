@@ -11,7 +11,7 @@ calculated - it only asks for the text.
 
 from __future__ import annotations
 
-from algorithms import SearchResult
+from core.algorithms import SearchResult
 
 # The six course metrics, in the order they are displayed.
 STAT_LABELS = [

@@ -48,12 +48,18 @@ If you were given a ZIP instead, unzip it and `cd` into the folder that contains
 Confirm you are in the right place:
 
 ```bash
-ls main.py          # macOS / Linux
-dir main.py         # Windows CMD
+ls                    # macOS / Linux
+dir                   # Windows CMD
 ```
 
-You should see `main.py`, plus `algorithms.py`, `environment.py`, `models.py`,
-`statistics.py`, `ui.py`, `visualization.py`.
+You should see:
+
+```
+main.py
+core/         interface/
+docs/
+README.md  requirements.txt
+```
 
 ---
 
@@ -249,12 +255,12 @@ import random
 import sys
 import tkinter
 
-import algorithms
-import environment
-import models
-import statistics
-import ui
-import visualization
+from core import algorithms
+from core import environment
+from core import models
+from interface import statistics
+from interface import ui
+from interface import visualization
 
 print("Python  ", sys.version.split()[0])
 print("Tk       ", tkinter.TkVersion)
@@ -343,22 +349,32 @@ Then repeat steps 4–6.
 
 ## How the pieces fit together
 
+The project is split into two layers, and imports only ever point one way:
+
 ```
-        main.py                 opens the window, starts the app
-           |
-         ui.py                  controls, buttons, animation, comparison table
-        /     \
-environment.py  statistics.py  builds the world / formats the numbers
-        \     /
-       models.py                Agent, Environment, constants
-           |
-      algorithms.py             bfs, dfs, ucs, greedy_best_first, astar
-           |
-    visualization.py           draws everything on the canvas
+                       main.py                 opens the window, starts the app
+                          |
+     interface/  ─────────┼─────────────────
+        ui.py            |                   controls, buttons, animation, table
+        visualization.py  |                   draws the grid on the canvas
+        statistics.py     |                   numbers turned into text
+     ─────────────────────┼─────────────────
+          core/  ─────────┴─────────────────
+        models.py                            Agent, Environment, constants
+        environment.py                       builds the world, its rules
+        algorithms.py                        bfs, dfs, ucs, greedy, astar
 ```
 
-`algorithms.py` never imports `tkinter`, so the search algorithms can be tested
-and scripted without ever opening a window.
+`core/algorithms.py` never imports `tkinter` and never imports `interface`, so
+the search can be tested and scripted without opening a window:
+
+```bash
+python -c "from core.algorithms import run_search; print('no GUI needed')"
+```
+
+**Always run commands from the project root** — the folder containing
+`main.py`. Python puts that folder on `sys.path`, which is what makes `core` and
+`interface` importable.
 
 ---
 

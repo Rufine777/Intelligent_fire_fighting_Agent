@@ -46,8 +46,8 @@ plain module name (`from models import Environment`).
 | ---: | --- | :---: |
 | 1 | What problem is this actually solving? | No |
 | 2 | Running the app | Yes |
-| 3 | `models.py` — the vocabulary | No |
-| 4 | `environment.py` — building the world | No |
+| 3 | `core/models.py` — the vocabulary | No |
+| 4 | `core/environment.py` — building the world | No |
 | 5 | Search fundamentals — states and neighbours | No |
 | 6 | BFS — uninformed search | No |
 | 7 | DFS — and the data structures behind both | No |
@@ -93,7 +93,7 @@ deterministic**. That matters enormously:
 - *deterministic* — one action has one predictable result
 
 Because it is **static** and **fully observable**, the agent can plan its entire
-route in one go and then just execute it. That is why `ui.py` never re-plans
+route in one go and then just execute it. That is why `interface/ui.py` never re-plans
 mid-animation. In a dynamic world it would have to.
 
 ### The one-sentence version
@@ -122,8 +122,8 @@ above. Anything you got wrong, the code will teach you.
 
 ## Exercise
 
-The project supports at most 2 agents (`MAX_AGENTS` in `models.py`).
-Read `models.py:29-30`. What would you have to change to support 5?
+The project supports at most 2 agents (`MAX_AGENTS` in `core/models.py`).
+Read `core/models.py:29-30`. What would you have to change to support 5?
 
 *(Don't actually change it yet — just find every place that would break. Try
 grepping for `MAX_AGENTS` and for `PATH_COLORS`.)*
@@ -136,7 +136,7 @@ grepping for `MAX_AGENTS` and for `PATH_COLORS`.)*
 
 ## Read
 
-`main.py` (all 37 lines) and `models.py:20-26`.
+`main.py` (all 37 lines) and `core/models.py:20-26`.
 
 ## Key ideas
 
@@ -162,7 +162,7 @@ Four things to notice:
    readable message and exit code `1` instead of a traceback.
 4. **`main.py` has no logic.** If you ever edit it, something has gone wrong.
 
-`models.py:20-26` holds the constants you can change immediately:
+`core/models.py:20-26` holds the constants you can change immediately:
 
 ```python
 DEFAULT_ROWS = 10
@@ -188,8 +188,8 @@ Then run the algorithms by hand:
 
 ```bash
 python - <<'PY'
-from environment import generate_environment
-from algorithms import run_search
+from core.environment import generate_environment
+from core.algorithms import run_search
 
 env = generate_environment(10, 10, 1, weighted=True)
 print("agents:", [a.position for a in env.agents])
@@ -207,7 +207,7 @@ Everything the GUI does, it does by calling these same functions.
 
 ## Check yourself
 
-- Why is the window a fixed size, not resizable? (Hint: `ui.py` sets
+- Why is the window a fixed size, not resizable? (Hint: `interface/ui.py` sets
   `root.resizable(False, False)`.)
 - What is the exit code if there is no display? Why bother returning one?
 - In that script, which algorithm found the cheapest path?
@@ -220,13 +220,13 @@ matter for anything that runs unattended?
 
 ---
 
-# Session 3 — `models.py` — the vocabulary
+# Session 3 — `core/models.py` — the vocabulary
 
 **Goal:** be able to describe the entire problem using only types from this file.
 
 ## Read
 
-`models.py` — all 118 lines. It is the smallest file and the most important
+`core/models.py` — all 118 lines. It is the smallest file and the most important
 vocabulary.
 
 ## Key ideas
@@ -239,7 +239,7 @@ Position = tuple[int, int]   # row first, then column, like matrix[row][col]
 
 Note **row, column** — not x, y. This trips people up constantly when they reach
 the drawing code, because canvas coordinates are `(x, y)` = `(col, row)`. The
-inversion is handled in exactly one place, `visualization.py:67-69`.
+inversion is handled in exactly one place, `interface/visualization.py:67-69`.
 
 ### Two dataclasses
 
@@ -303,7 +303,7 @@ narrow surface is why the tests are easy to write.
 
 ```bash
 python - <<'PY'
-from models import Environment, Agent, Position
+from core.models import Environment, Agent, Position
 
 env = Environment(rows=5, cols=5,
                   agents=[Agent(id=1, position=(0, 0))],
@@ -336,22 +336,22 @@ PY
 ## Exercise
 
 Break it deliberately. Change `field(default_factory=set)` to `= set()` for
-`obstacles` in a **copy** of `models.py`, generate two environments, and confirm
+`obstacles` in a **copy** of `core/models.py`, generate two environments, and confirm
 they share state. Then fix it. Knowing the symptom makes you able to spot this
 bug in code you didn't write.
 
 ---
 
-# Session 4 — `environment.py` — building the world
+# Session 4 — `core/environment.py` — building the world
 
 **Goal:** understand why the generated map is always solvable, and why objects
 never overlap.
 
 ## Read
 
-- `environment.py:156-211` — `generate_environment`
-- `environment.py:84-119` — `reachable_cells` and `is_solvable`
-- `environment.py:45-77` — `neighbours`, `path_cost`, `path_length`
+- `core/environment.py:156-211` — `generate_environment`
+- `core/environment.py:84-119` — `reachable_cells` and `is_solvable`
+- `core/environment.py:45-77` — `neighbours`, `path_cost`, `path_length`
 
 ## Key ideas
 
@@ -385,8 +385,8 @@ with a guaranteed-safe fallback (no obstacles at all) if all of them fail.
 
 ### The solvability check is its own BFS
 
-`reachable_cells` is a plain flood fill. `environment.py` deliberately does
-**not** import BFS from `algorithms.py`. Saving 8 lines would have coupled
+`reachable_cells` is a plain flood fill. `core/environment.py` deliberately does
+**not** import BFS from `core/algorithms.py`. Saving 8 lines would have coupled
 environment generation to the search algorithms — a worse architecture.
 
 ### `neighbours` — the successor function
@@ -432,9 +432,9 @@ cell it already occupies. Consequence: in unweighted mode
 ```bash
 python - <<'PY'
 import random
-from environment import (generate_environment, is_solvable, neighbours,
+from core.environment import (generate_environment, is_solvable, neighbours,
                          path_cost, path_length, reachable_cells)
-from algorithms import bfs
+from core.algorithms import bfs
 
 # 1. Non-overlap, across many seeds
 for seed in range(50):
@@ -489,10 +489,10 @@ your own words.
 
 ## Read
 
-- `algorithms.py:1-27` — the module docstring. Read it twice; it is the best
+- `core/algorithms.py:1-27` — the module docstring. Read it twice; it is the best
   summary in the project.
-- `algorithms.py:41` — `ALGORITHM_NAMES`
-- `algorithms.py:49-71` — `SearchResult`
+- `core/algorithms.py:41` — `ALGORITHM_NAMES`
+- `core/algorithms.py:49-71` — `SearchResult`
 
 ## Key ideas
 
@@ -568,8 +568,8 @@ cheapest. Same code, safe in one algorithm and wrong in the other.
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import SEARCH_ALGORITHMS, ALGORITHM_NAMES
+from core.environment import generate_environment
+from core.algorithms import SEARCH_ALGORITHMS, ALGORITHM_NAMES
 
 print("registered algorithms:", list(SEARCH_ALGORITHMS))
 print("dropdown order        :", ALGORITHM_NAMES)
@@ -604,7 +604,7 @@ step-count but not for cost.
 
 ## Read
 
-`algorithms.py:147-187` — the `bfs` function, in full. It is 40 lines.
+`core/algorithms.py:147-187` — the `bfs` function, in full. It is 40 lines.
 
 ## Key ideas
 
@@ -661,8 +661,8 @@ your answer:
 
 ```bash
 python - <<'PY'
-from models import Environment, Agent
-from algorithms import bfs
+from core.models import Environment, Agent
+from core.algorithms import bfs
 
 def grid(rows=5, cols=5, weighted=False, costs=None):
     return Environment(rows=rows, cols=cols,
@@ -689,8 +689,8 @@ only the algorithm differs:
 
 ```bash
 python - <<'PY'
-from models import Environment, Agent
-from algorithms import bfs, ucs, astar
+from core.models import Environment, Agent
+from core.algorithms import bfs, ucs, astar
 
 # A verified layout: start bottom-left, fire top-right, 5 obstacles,
 # and hand-picked costs so that two equally-short routes differ wildly in price.
@@ -748,7 +748,7 @@ structures that underpin all five algorithms.
 
 ## Read
 
-`algorithms.py:194-235` — the `dfs` function.
+`core/algorithms.py:194-235` — the `dfs` function.
 
 ## Key ideas
 
@@ -799,8 +799,8 @@ Compare the shapes directly on the same problem:
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import bfs, dfs
+from core.environment import generate_environment
+from core.algorithms import bfs, dfs
 
 env = generate_environment(12, 12, 1, weighted=False, rng=random.Random(3))
 start, goal = env.agents[0].position, env.fire_position
@@ -820,8 +820,8 @@ Now find the case where DFS actually wins on node count:
 
 ```bash
 python - <<'PY'
-from models import Environment, Agent
-from algorithms import bfs, dfs
+from core.models import Environment, Agent
+from core.algorithms import bfs, dfs
 
 # Fire in the very next cell: DFS walks straight to it.
 env = Environment(rows=10, cols=10, agents=[Agent(id=1, position=(0, 0))],
@@ -857,7 +857,7 @@ revisable.
 
 ## Read
 
-`algorithms.py:242-299` — the `ucs` function.
+`core/algorithms.py:242-299` — the `ucs` function.
 
 ## Key ideas
 
@@ -917,8 +917,8 @@ consistency check: UCS is a strict generalisation of BFS.
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import bfs, ucs
+from core.environment import generate_environment
+from core.algorithms import bfs, ucs
 
 # Unweighted: BFS and UCS must agree exactly.
 for seed in range(5):
@@ -945,8 +945,8 @@ implementation:
 ```bash
 python - <<'PY'
 import heapq, random
-from environment import generate_environment, neighbours
-from algorithms import ucs
+from core.environment import generate_environment, neighbours
+from core.algorithms import ucs
 
 def true_min_cost(env, start, goal):
     """Independent Dijkstra, written from scratch as the oracle."""
@@ -988,11 +988,11 @@ Zero mismatches means UCS is provably correct on this problem class.
 - When BFS and UCS produce the same answer, what does that tell you about the
   map?
 - In the oracle, why did `true_min_cost` subtract `env.cost_of(start)` at the
-  end? (Clue: read `path_cost` in `environment.py:63`.)
+  end? (Clue: read `path_cost` in `core/environment.py:63`.)
 
 ## Exercise
 
-Set `MIN_CELL_COST = 0` in a copy of `models.py`, regenerate a weighted map, and
+Set `MIN_CELL_COST = 0` in a copy of `core/models.py`, regenerate a weighted map, and
 re-run the oracle comparison. Does UCS stay correct? Does the Manhattan
 heuristic stay admissible? Write down what breaks and why. This is the
 experiment that proves *why* `MIN_CELL_COST` must be `1`.
@@ -1005,7 +1005,7 @@ experiment that proves *why* `MIN_CELL_COST` must be `1`.
 
 ## Read
 
-`algorithms.py:78-85` — the `manhattan` function (8 lines).
+`core/algorithms.py:78-85` — the `manhattan` function (8 lines).
 
 ## Key ideas
 
@@ -1052,8 +1052,8 @@ remaining cost on *every* cell of many random maps:
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import manhattan
+from core.environment import generate_environment
+from core.algorithms import manhattan
 
 violations = 0
 checked = 0
@@ -1065,7 +1065,7 @@ for seed in range(60):
             continue
         # True remaining cost: UCS forward from cell to goal
         import heapq
-        from environment import neighbours
+        from core.environment import neighbours
         best = {cell: env.cost_of(cell)}
         pq = [(best[cell], cell)]
         seen, truth = set(), None
@@ -1096,8 +1096,8 @@ Watch how *loose* the heuristic is — this is the raw material for session 10:
 ```bash
 python - <<'PY'
 import heapq, random
-from environment import generate_environment, neighbours
-from algorithms import manhattan, bfs
+from core.environment import generate_environment, neighbours
+from core.algorithms import manhattan, bfs
 
 env = generate_environment(12, 12, 1, weighted=True, rng=random.Random(3))
 start, goal = env.agents[0].position, env.fire_position
@@ -1133,7 +1133,7 @@ PY
 Prove Manhattan is **not** an admissible heuristic for 8-way (diagonal) movement.
 Work out the true cost of a single diagonal step under both metrics. Then decide:
 if you added diagonals to `DIRECTIONS`, would you also need to change `manhattan`?
-Try it — add diagonals to the tuple in `neighbours` (`environment.py:52`) in a
+Try it — add diagonals to the tuple in `neighbours` (`core/environment.py:52`) in a
 copy and see what breaks in
 the algorithms.
 
@@ -1146,7 +1146,7 @@ difference in one sentence.
 
 ## Read
 
-`algorithms.py:306-363` (`greedy_best_first`) and `algorithms.py:370-432`
+`core/algorithms.py:306-363` (`greedy_best_first`) and `core/algorithms.py:370-432`
 (`astar`). Compare them side by side — they are almost identical, and that is the
 point.
 
@@ -1194,8 +1194,8 @@ Run all five on the same frozen map, several times, and watch the rows line up:
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import ALGORITHM_NAMES, run_search
+from core.environment import generate_environment
+from core.algorithms import ALGORITHM_NAMES, run_search
 
 env = generate_environment(12, 12, 1, weighted=True, rng=random.Random(11))
 print(f"map frozen: {len(env.obstacles)} obstacles, weighted costs 1..9\n")
@@ -1222,8 +1222,8 @@ Now compare *expansion patterns* — the visual signature of each algorithm. Run
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import bfs, ucs, greedy_best_first, astar
+from core.environment import generate_environment
+from core.algorithms import bfs, ucs, greedy_best_first, astar
 
 env = generate_environment(9, 9, 1, weighted=True, rng=random.Random(3))
 s, g = env.agents[0].position, env.fire_position
@@ -1303,9 +1303,9 @@ six reported numbers really measures.
 
 ## Read
 
-- `algorithms.py:88-102` — `_reconstruct_path`
-- `algorithms.py:105-140` — `_build_result`
-- `statistics.py` — all 87 lines
+- `core/algorithms.py:88-102` — `_reconstruct_path`
+- `core/algorithms.py:105-140` — `_build_result`
+- `interface/statistics.py` — all 87 lines
 
 ## Key ideas
 
@@ -1363,8 +1363,8 @@ start cell is excluded:
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import run_search
+from core.environment import generate_environment
+from core.algorithms import run_search
 
 env = generate_environment(10, 10, 1, weighted=True, rng=random.Random(4))
 r = run_search("A*", env, env.agents[0].position, env.fire_position, 1)
@@ -1384,15 +1384,15 @@ print(f"non-adjacent steps  : {len(bad)}  (must be 0)")
 PY
 ```
 
-`statistics.py` exists so the UI never has to know *how* a number is computed —
+`interface/statistics.py` exists so the UI never has to know *how* a number is computed —
 it just asks for the text:
 
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import run_search
-from statistics import result_statistics, comparison_row, overall_status
+from core.environment import generate_environment
+from core.algorithms import run_search
+from interface.statistics import result_statistics, comparison_row, overall_status
 
 env = generate_environment(10, 10, 1, weighted=True, rng=random.Random(2))
 r = run_search("A*", env, env.agents[0].position, env.fire_position, 1)
@@ -1419,7 +1419,7 @@ Reproduce the README benchmark table from scratch: 300 maps of 12×12, half
 weighted, all five algorithms. Print averages for cost, length and nodes. Your
 numbers should match the README exactly — and when they do, you have proved the
 whole system is deterministic. Then change the order of neighbours in
-`regenerate_costs` in `environment.py` and re-run. Which numbers change, and
+`regenerate_costs` in `core/environment.py` and re-run. Which numbers change, and
 which don't?
 
 ---
@@ -1432,21 +1432,21 @@ a viva will actually ask.
 ## Read
 
 - `main.py:20-33`
-- `environment.py:84-105` (the local flood fill)
-- `algorithms.py:49-71` (`SearchResult`), `439-461` (the registry)
-- `environment.py:156-211` (placement order), `170-172` (the clamp)
-- `models.py:86-90` (`start_positions`)
+- `core/environment.py:84-105` (the local flood fill)
+- `core/algorithms.py:49-71` (`SearchResult`), `439-461` (the registry)
+- `core/environment.py:156-211` (placement order), `170-172` (the clamp)
+- `core/models.py:86-90` (`start_positions`)
 
 ## Key ideas
 
 ### 1. Layering
 
 ```
-models.py  ←  environment.py  ←  ui.py  ←  main.py
-     ↑             algorithms.py
+core/models.py  ←  core/environment.py  ←  interface/ui.py  ←  main.py
+     ↑             core/algorithms.py
 ```
 
-`algorithms.py` never imports `tkinter`. The search has no idea a GUI exists.
+`core/algorithms.py` never imports `tkinter`. The search has no idea a GUI exists.
 Proof it's a real separation, not just a comment: **you can run all 97 tests'
 logic half without a display.**
 
@@ -1461,8 +1461,8 @@ remember to do by pressing Reset.
 
 ### 3. Duplicate the flood fill, don't couple the modules
 
-`environment.py` writes its own 8-line BFS instead of importing `bfs` from
-`algorithms.py`. Saving 8 lines would have created a dependency between two
+`core/environment.py` writes its own 8-line BFS instead of importing `bfs` from
+`core/algorithms.py`. Saving 8 lines would have created a dependency between two
 logically independent modules. The duplication is cheaper than the coupling.
 
 ### 4. The registry pattern
@@ -1513,7 +1513,7 @@ Make each design decision visible with a quick experiment. Start by adding a
 sixth algorithm using only the registry:
 
 ```bash
-# Add to algorithms.py:
+# Add to core/algorithms.py:
 #   def dijkstra(environment, start, goal, agent_id=1):
 #       return ucs(environment, start, goal, agent_id)
 # and to SEARCH_ALGORITHMS:  "Dijkstra": dijkstra
@@ -1521,8 +1521,8 @@ sixth algorithm using only the registry:
 
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import ucs
+from core.environment import generate_environment
+from core.algorithms import ucs
 
 # Show that "Dijkstra" IS "UCS" - same object, same results.
 env = generate_environment(10, 10, 1, weighted=True, rng=random.Random(7))
@@ -1537,8 +1537,8 @@ Then verify the "fair comparison" claim directly:
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import ALGORITHM_NAMES, run_search
+from core.environment import generate_environment
+from core.algorithms import ALGORITHM_NAMES, run_search
 
 env = generate_environment(12, 12, 1, weighted=True, rng=random.Random(9))
 snapshot = (sorted(env.obstacles), dict(env.cell_costs),
@@ -1569,7 +1569,7 @@ against it. Good candidates:
 
 - Should each agent get its own search instead of all agents racing to the
   same fire cell?
-- Should `statistics.py` be renamed to avoid shadowing the stdlib module?
+- Should `interface/statistics.py` be renamed to avoid shadowing the stdlib module?
 - Should grid size be user-configurable rather than hard-coded?
 
 ---
@@ -1581,14 +1581,14 @@ without breaking it.
 
 ## Read
 
-- `ui.py:48-51` — animation timing constants
-- `ui.py:57-91` — `__init__` and all application state
-- `ui.py:307-337` — `_sync_controls`, `_set_visible`, `_set_state`
-- `ui.py:411-455` — `run_search`
-- `ui.py:457-487` — `_animate_exploration`
-- `ui.py:514-558` — `_animate_movement`
-- `ui.py:727-735` — `_cancel_animation`
-- `visualization.py:91-154` — `GridRenderer.draw`
+- `interface/ui.py:42-48` — animation timing constants
+- `interface/ui.py:54-86` — `__init__` and all application state
+- `interface/ui.py:269-302` — `_sync_controls`, `_set_visible`, `_set_state`
+- `interface/ui.py:360-405` — `run_search`
+- `interface/ui.py:406-437` — `_animate_exploration`
+- `interface/ui.py:463-502` — `_animate_movement`
+- `interface/ui.py:604-612` — `_cancel_animation`
+- `interface/visualization.py:88-155` — `GridRenderer.draw`
 
 ## Key ideas
 
@@ -1668,7 +1668,7 @@ with the same capability.
 
 ### Painting order *is* the layering
 
-`GridRenderer.draw()` (`visualization.py:91-154`) repaints everything in a fixed
+`GridRenderer.draw()` (`interface/visualization.py:88-155`) repaints everything in a fixed
 order:
 
 ```
@@ -1697,7 +1697,7 @@ Make the animation visible and tunable. Change `MOVE_FRAME_MS` from `110` to
 `20` — the agent now walks 5× faster:
 
 ```bash
-grep -n "MOVE_FRAME_MS\|EXPLORE_FRAME_MS\|EXPLORE_CELLS_PER_FRAME" ui.py
+grep -n "MOVE_FRAME_MS\|EXPLORE_FRAME_MS\|EXPLORE_CELLS_PER_FRAME" interface/ui.py
 ```
 
 Then try the fragile part. Add a **sixth** button to `_build_buttons` that
@@ -1705,7 +1705,7 @@ cancels a running animation, and confirm no error dialog appears when you spam i
 mid-animation:
 
 ```python
-# temporary experiment in ui.py
+# temporary experiment in interface/ui.py
 ttk.Button(bar, text="Panic Cancel", command=self._cancel_animation).pack(side=tk.LEFT, padx=3)
 ```
 
@@ -1731,7 +1731,7 @@ Finally, inspect what was actually drawn — this is what the UI tests do:
 ```bash
 python -c "
 import re
-src = open('visualization.py').read()
+src = open('interface/visualization.py').read()
 for m in re.finditer(r'canvas\.create_(\w+)\(', src):
     print(m.group(1))
 " | sort | uniq -c
@@ -1868,8 +1868,8 @@ Now the definitive experiment. Everything you've learned, in one table:
 ```bash
 python - <<'PY'
 import random
-from environment import generate_environment
-from algorithms import ALGORITHM_NAMES, run_search
+from core.environment import generate_environment
+from core.algorithms import ALGORITHM_NAMES, run_search
 
 def mean(xs): return sum(xs) / len(xs)
 
@@ -1969,5 +1969,5 @@ that tell you about how fragile that test is?
 - **Move `import tkinter` into the GUI test class** — so the 58 non-GUI tests
   run on any machine, with no Tk installed. The highest-value small fix in the
   project.
-- **Rename `statistics.py`** — it shadows the stdlib module and will confuse
+- **Rename `interface/statistics.py`** — it shadows the stdlib module and will confuse
   anyone who writes a scratch script in this folder.

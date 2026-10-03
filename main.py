@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 import tkinter as tk
 
-from ui import FirefightingApp
+from interface.ui import FirefightingApp
 
 
 def main() -> int:

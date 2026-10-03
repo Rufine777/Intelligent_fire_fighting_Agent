@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
-from models import Agent, Environment, Position
+from core.models import Agent, Environment, Position
 
 # A small, readable colour scheme.
 COLORS = {

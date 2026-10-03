@@ -34,8 +34,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable
 
-from environment import neighbours, path_cost, path_length
-from models import Environment, Position
+from core.environment import neighbours, path_cost, path_length
+from core.models import Environment, Position
 
 # The five selectable algorithms, in the order they appear in the dropdown.
 ALGORITHM_NAMES = ["BFS", "DFS", "UCS", "Greedy Best-First", "A*"]

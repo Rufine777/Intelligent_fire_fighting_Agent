@@ -20,9 +20,9 @@ import random
 import tkinter as tk
 from tkinter import ttk
 
-import environment as env_module
-from algorithms import ALGORITHM_NAMES, SearchResult, run_search
-from models import (
+from core import environment as env_module
+from core.algorithms import ALGORITHM_NAMES, SearchResult, run_search
+from core.models import (
     DEFAULT_COLS,
     DEFAULT_ROWS,
     MAX_AGENTS,
@@ -30,14 +30,14 @@ from models import (
     Environment,
     Position,
 )
-from statistics import (
+from interface.statistics import (
     COMPARISON_COLUMNS,
     STAT_LABELS,
     comparison_row,
     overall_status,
     result_statistics,
 )
-from visualization import COLORS, GridRenderer, build_legend
+from interface.visualization import COLORS, GridRenderer, build_legend
 
 # --- animation timing -------------------------------------------------------
 # Cells revealed per animation frame, and the delay between frames. Small
